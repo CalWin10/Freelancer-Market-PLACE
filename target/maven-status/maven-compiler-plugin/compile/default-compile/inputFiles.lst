@@ -15,6 +15,7 @@ D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\controller\Notif
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\controller\ProjectController.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\controller\UserController.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\ApplicationRequest.java
+D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\CreateProjectRequest.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\ForgotPasswordRequest.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\LoginRequest.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\MessageRequest.java
@@ -23,6 +24,7 @@ D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\Regi
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\ResetPasswordRequest.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\UpdateClientProfileRequest.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\UpdateFreelancerProfileRequest.java
+D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\UpdateProjectRequest.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\response\ApplicationResponse.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\response\AuthResponse.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\response\ClientProfileResponse.java
