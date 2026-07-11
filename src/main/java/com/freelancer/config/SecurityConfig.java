@@ -50,6 +50,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**")
                         .permitAll()
 
+                        .requestMatchers(
+                            "/swagger-ui/**",
+                            "/v3/api-docs/**",
+                            "/swagger-ui.html"
+                        )
+                        .permitAll()
+
                         // Admin APIs
                         .requestMatchers("/api/v1/admin/**")
                         .hasRole("ADMIN")
@@ -84,7 +91,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        return new BCryptPasswordEncoder(12);
     }
 
     @Bean

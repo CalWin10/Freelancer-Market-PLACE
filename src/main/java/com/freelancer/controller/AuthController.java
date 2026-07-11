@@ -16,13 +16,11 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-public ResponseEntity<AuthResponse> register(
-        @Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<AuthResponse> register(
+            @Valid @RequestBody RegisterRequest request) {
 
-    System.out.println("REGISTER API HIT");
-
-    return ResponseEntity.ok(authService.register(request));
-}
+        return ResponseEntity.ok(authService.register(request));
+    }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(

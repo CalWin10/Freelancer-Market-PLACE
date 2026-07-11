@@ -15,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -46,7 +47,7 @@ public class AuthService {
 
         userRepository.save(user);
 
-        String token = jwtService.generateToken(user.getEmail());
+        String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
 
         return AuthResponse.builder()
                 .token(token)
@@ -66,7 +67,7 @@ public class AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Invalid email or password"));
 
-        String token = jwtService.generateToken(user.getEmail());
+        String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
 
         return AuthResponse.builder()
                 .token(token)
@@ -76,29 +77,29 @@ public class AuthService {
 
     public String forgotPassword(ForgotPasswordRequest request) {
 
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        // Do not reveal whether the email exists (prevents user enumeration)
+        Optional<User> userOpt = userRepository.findByEmail(request.getEmail());
 
-        String token = UUID.randomUUID().toString();
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            String token = UUID.randomUUID().toString();
+            user.setResetToken(token);
+            user.setResetTokenExpiry(LocalDateTime.now().plusMinutes(15));
+            userRepository.save(user);
+            emailService.sendResetEmail(user.getEmail(), token);
+        }
 
-        user.setResetToken(token);
-        user.setResetTokenExpiry(LocalDateTime.now().plusMinutes(15));
-
-        userRepository.save(user);
-
-        emailService.sendResetEmail(user.getEmail(), token);
-
-        return "Password reset email sent successfully.";
+        return "If that email is registered, a password reset link has been sent.";
     }
 
     public String resetPassword(ResetPasswordRequest request) {
 
         User user = userRepository.findByResetToken(request.getToken())
-                .orElseThrow(() -> new RuntimeException("Invalid reset token"));
+                .orElseThrow(() -> new RuntimeException("Invalid or expired reset token"));
 
         if (user.getResetTokenExpiry() == null ||
                 user.getResetTokenExpiry().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Reset token expired.");
+            throw new RuntimeException("Invalid or expired reset token");
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
