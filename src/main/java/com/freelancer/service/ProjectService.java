@@ -40,6 +40,18 @@ public class ProjectService {
         return map(savedProject);
     }
 
+    // GET SINGLE PROJECT
+    public ProjectResponse getProject(String email, Long id) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+        if (!project.getClient().getId().equals(user.getId())) {
+            throw new RuntimeException("Access Denied");
+        }
+        return map(project);
+    }
+
     // GET MY PROJECTS
     public Page<ProjectResponse> getMyProjects(String email, int page, int size) {
 

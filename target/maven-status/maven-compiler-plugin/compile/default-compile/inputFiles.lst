@@ -1,6 +1,7 @@
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\config\CorsConfig.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\config\JwtFilter.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\config\JwtUtil.java
+D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\config\OpenApiConfig.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\config\SecurityConfig.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\config\WebConfig.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\controller\AdminController.java
@@ -14,6 +15,7 @@ D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\controller\Messa
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\controller\NotificationController.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\controller\ProjectController.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\controller\UserController.java
+D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\PortfolioItemDto.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\ApplicationRequest.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\CreateProjectRequest.java
 D:\Freelancer Market PLACE\backend\src\main\java\com\freelancer\dto\request\ForgotPasswordRequest.java

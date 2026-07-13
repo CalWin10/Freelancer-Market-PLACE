@@ -12,12 +12,10 @@ import lombok.NoArgsConstructor;
 public class ClientProfileResponse {
 
     private Long id;
-
+    private String fullName;
+    private String email;
     private String companyName;
-
     private String contactName;
-
     private String bio;
-
     private String profilePhotoUrl;
 }

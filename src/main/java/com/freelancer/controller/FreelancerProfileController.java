@@ -3,13 +3,14 @@ package com.freelancer.controller;
 import com.freelancer.dto.request.UpdateFreelancerProfileRequest;
 import com.freelancer.dto.response.FreelancerProfileResponse;
 import com.freelancer.service.FreelancerProfileService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/freelancer")
+@RequestMapping("/api/v1/freelancers")
 @RequiredArgsConstructor
 public class FreelancerProfileController {
 
@@ -17,19 +18,15 @@ public class FreelancerProfileController {
 
     @GetMapping("/me")
     public ResponseEntity<FreelancerProfileResponse> getMyProfile(Authentication authentication) {
-
         return ResponseEntity.ok(
-                freelancerProfileService.getMyProfile(authentication.getName())
-        );
+                freelancerProfileService.getMyProfile(authentication.getName()));
     }
 
     @PutMapping("/me")
     public ResponseEntity<FreelancerProfileResponse> updateMyProfile(
             Authentication authentication,
-            @RequestBody UpdateFreelancerProfileRequest request) {
-
+            @Valid @RequestBody UpdateFreelancerProfileRequest request) {
         return ResponseEntity.ok(
-                freelancerProfileService.updateMyProfile(authentication.getName(), request)
-        );
+                freelancerProfileService.updateMyProfile(authentication.getName(), request));
     }
 }

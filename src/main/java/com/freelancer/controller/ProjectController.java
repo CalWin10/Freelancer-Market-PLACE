@@ -29,7 +29,7 @@ public class ProjectController {
         );
     }
 
-    // Get My Projects
+    // Get My Projects — must be declared BEFORE /{id} to avoid route conflict
     @GetMapping("/my")
     public ResponseEntity<Page<ProjectResponse>> getMyProjects(
             Authentication authentication,
@@ -50,6 +50,16 @@ public class ProjectController {
 
         return ResponseEntity.ok(
                 projectService.updateProject(authentication.getName(), id, request)
+        );
+    }
+
+    // Get Single Project
+    @GetMapping("/{id}")
+    public ResponseEntity<ProjectResponse> getProject(
+            Authentication authentication,
+            @PathVariable Long id) {
+        return ResponseEntity.ok(
+                projectService.getProject(authentication.getName(), id)
         );
     }
 

@@ -17,6 +17,12 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.http.HttpMethod;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableMethodSecurity
@@ -31,7 +37,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
-        http
+        http    
+                .cors(cors -> {})
                 .csrf(csrf -> csrf.disable())
 
                 .sessionManagement(session ->
@@ -62,14 +69,19 @@ public class SecurityConfig {
                         .hasRole("ADMIN")
 
                         // Client APIs
-                        .requestMatchers("/api/v1/client/**")
+                        .requestMatchers("/api/v1/client/**", "/api/v1/clients/**")
                         .hasRole("CLIENT")
 
                         // Freelancer APIs
-                        .requestMatchers("/api/v1/freelancer/**")
+                        .requestMatchers("/api/v1/freelancer/**", "/api/v1/freelancers/**")
                         .hasRole("FREELANCER")
 
+                        // Photo upload — any authenticated user
+                        .requestMatchers("/api/v1/users/me/**")
+                        .authenticated()
+
                         // Everything else
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest()
                         .authenticated()
                 )
@@ -100,4 +112,31 @@ public class SecurityConfig {
 
         return configuration.getAuthenticationManager();
     }
+    @Bean
+public CorsConfigurationSource corsConfigurationSource() {
+
+    CorsConfiguration configuration = new CorsConfiguration();
+
+    configuration.setAllowedOrigins(List.of(
+            "http://localhost:8081"
+    ));
+
+    configuration.setAllowedMethods(List.of(
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "OPTIONS"
+    ));
+
+    configuration.setAllowedHeaders(List.of("*"));
+    configuration.setAllowCredentials(true);
+
+    UrlBasedCorsConfigurationSource source =
+            new UrlBasedCorsConfigurationSource();
+
+    source.registerCorsConfiguration("/**", configuration);
+
+    return source;
+}
 }

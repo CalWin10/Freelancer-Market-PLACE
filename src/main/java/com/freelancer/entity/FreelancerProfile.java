@@ -3,6 +3,8 @@ package com.freelancer.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.ArrayList;
+import java.util.List;
 @Entity
 @Getter
 @Setter
@@ -26,8 +28,12 @@ public class FreelancerProfile {
 
     private Double hourlyRate;
 
+    // Stored as JSON array string: ["Java","React"]
     @Column(length = 3000)
     private String skills;
 
     private String profilePhotoUrl;
+
+    @OneToMany(mappedBy = "freelancerProfile", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PortfolioItem> portfolioItems = new ArrayList<>();
 }
