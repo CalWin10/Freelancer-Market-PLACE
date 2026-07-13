@@ -2,47 +2,33 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ProjectCard from "../../components/cards/ProjectCard";
 import { Project } from "../../types/project";
-import {
-  deleteProject,
-  getMyProjects,
-} from "../../services/projectService";
+import { deleteProject, getMyProjects } from "../../services/projectService";
 
 const MyProjects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
   const loadProjects = async () => {
     try {
       const response = await getMyProjects();
       setProjects(response.content);
-    } catch (error) {
-      console.error(error);
-      alert("Failed to load projects.");
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? "Failed to load projects.");
     }
   };
 
-  useEffect(() => {
-    loadProjects();
-  }, []);
+  useEffect(() => { loadProjects(); }, []);
 
-  const handleEdit = (id: number) => {
-    navigate(`/projects/edit/${id}`);
-  };
+  const handleEdit = (id: number) => navigate(`/projects/edit/${id}`);
 
   const handleDelete = async (id: number) => {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this project?"
-    );
-
-    if (!confirmDelete) return;
-
+    if (!window.confirm("Are you sure you want to delete this project?")) return;
     try {
       await deleteProject(id);
-      alert("Project deleted successfully.");
       loadProjects();
-    } catch (error) {
-      console.error(error);
-      alert("Failed to delete project.");
+    } catch (err: any) {
+      alert(err.response?.data?.message ?? "Failed to delete project.");
     }
   };
 
@@ -52,14 +38,12 @@ const MyProjects = () => {
 
       <button
         onClick={() => navigate("/projects/create")}
-        style={{
-          marginBottom: "20px",
-          padding: "10px 20px",
-          cursor: "pointer",
-        }}
+        style={{ marginBottom: "20px", padding: "10px 20px", cursor: "pointer" }}
       >
         + Create New Project
       </button>
+
+      {error && <p style={{ color: "#e53e3e" }}>{error}</p>}
 
       {projects.length === 0 ? (
         <p>No projects found.</p>

@@ -51,33 +51,37 @@ const ProjectCard = ({
           gap: "10px",
         }}
       >
-        <button
-          onClick={() => onEdit(project.id)}
-          style={{
-            background: "#007bff",
-            color: "#fff",
-            border: "none",
-            padding: "8px 16px",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          Edit
-        </button>
+        {(project.status === "OPEN" || project.status === "DRAFT") && (
+          <>
+            <button
+              onClick={() => onEdit(project.id)}
+              style={{
+                background: "#007bff",
+                color: "#fff",
+                border: "none",
+                padding: "8px 16px",
+                borderRadius: "5px",
+                cursor: "pointer",
+              }}
+            >
+              Edit
+            </button>
 
-        <button
-          onClick={() => onDelete(project.id)}
-          style={{
-            background: "#dc3545",
-            color: "#fff",
-            border: "none",
-            padding: "8px 16px",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          Delete
-        </button>
+            <button
+              onClick={() => onDelete(project.id)}
+              style={{
+                background: "#dc3545",
+                color: "#fff",
+                border: "none",
+                padding: "8px 16px",
+                borderRadius: "5px",
+                cursor: "pointer",
+              }}
+            >
+              Delete
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

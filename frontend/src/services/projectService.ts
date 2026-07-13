@@ -1,4 +1,4 @@
-import axios from "axios";
+import api from "./api";
 import {
   CreateProjectRequest,
   UpdateProjectRequest,
@@ -6,51 +6,17 @@ import {
   Project,
 } from "../types/project";
 
-const API_URL = "http://localhost:8080/api/v1/projects";
+export const createProject = (project: CreateProjectRequest): Promise<Project> =>
+  api.post("/projects", project).then((r) => r.data);
 
-const getAuthHeader = () => {
-  const token = localStorage.getItem("token");
+export const getMyProjects = (page = 0, size = 10): Promise<PageResponse<Project>> =>
+  api.get(`/projects/my?page=${page}&size=${size}`).then((r) => r.data);
 
-  return {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-};
+export const getProject = (id: number): Promise<Project> =>
+  api.get(`/projects/${id}`).then((r) => r.data);
 
-export const createProject = async (
-  project: CreateProjectRequest
-): Promise<Project> => {
-  const response = await axios.post(API_URL, project, getAuthHeader());
-  return response.data;
-};
+export const updateProject = (id: number, project: UpdateProjectRequest): Promise<Project> =>
+  api.put(`/projects/${id}`, project).then((r) => r.data);
 
-export const getMyProjects = async (
-  page: number = 0,
-  size: number = 10
-): Promise<PageResponse<Project>> => {
-  const response = await axios.get(
-    `${API_URL}/my?page=${page}&size=${size}`,
-    getAuthHeader()
-  );
-
-  return response.data;
-};
-
-export const updateProject = async (
-  id: number,
-  project: UpdateProjectRequest
-): Promise<Project> => {
-  const response = await axios.put(
-    `${API_URL}/${id}`,
-    project,
-    getAuthHeader()
-  );
-
-  return response.data;
-};
-
-export const deleteProject = async (id: number): Promise<void> => {
-  await axios.delete(`${API_URL}/${id}`, getAuthHeader());
-};
+export const deleteProject = (id: number): Promise<void> =>
+  api.delete(`/projects/${id}`).then((r) => r.data);

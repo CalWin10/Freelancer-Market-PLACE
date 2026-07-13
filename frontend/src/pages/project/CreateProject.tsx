@@ -1,8 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import ProjectForm from "../../components/forms/ProjectForm";
-import {
-  CreateProjectRequest,
-} from "../../types/project";
+import { CreateProjectRequest } from "../../types/project";
 import { createProject } from "../../services/projectService";
 
 const CreateProject = () => {
@@ -11,22 +9,22 @@ const CreateProject = () => {
   const handleCreate = async (data: CreateProjectRequest) => {
     try {
       await createProject(data);
-
       alert("Project created successfully!");
-
       navigate("/projects/my");
-    } catch (error) {
-      console.error(error);
-      alert("Failed to create project.");
+    } catch (error: any) {
+      const msg = error.response?.data?.message ?? "Failed to create project.";
+      const errors = error.response?.data?.errors;
+      if (errors) {
+        alert(Object.values(errors).join("\n"));
+      } else {
+        alert(msg);
+      }
     }
   };
 
   return (
     <div style={{ padding: "30px" }}>
-      <ProjectForm
-        buttonText="Create Project"
-        onSubmit={handleCreate}
-      />
+      <ProjectForm buttonText="Create Project" onSubmit={handleCreate} />
     </div>
   );
 };
