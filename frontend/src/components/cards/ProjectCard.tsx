@@ -1,89 +1,92 @@
-import { Project } from "../../types/project";
+import { Link } from "react-router-dom";
+import type { ProjectSummary } from "../../types/project";
+import { formatCurrency, formatDate, truncate } from "../../utils/format";
+import Button from "../common/Button";
+import Card from "../common/Card";
+import Icon from "../common/Icon";
 import StatusBadge from "../common/StatusBadge";
 
 type ProjectCardProps = {
-  project: Project;
-  onEdit: (id: number) => void;
-  onDelete: (id: number) => void;
+  project: ProjectSummary;
+  onEdit?: (id: number) => void;
+  onDelete?: (id: number) => void;
+  deleting?: boolean;
+  compact?: boolean;
 };
 
-const ProjectCard = ({
-  project,
-  onEdit,
-  onDelete,
-}: ProjectCardProps) => {
+const ProjectCard = ({ project, onEdit, onDelete, deleting = false, compact = false }: ProjectCardProps) => {
+  const skills = project.requiredSkills
+    ?.split(",")
+    .map((skill) => skill.trim())
+    .filter(Boolean);
+  const canModify = project.status === "OPEN" || project.status === "DRAFT";
+
   return (
-    <div
-      style={{
-        border: "1px solid #ddd",
-        borderRadius: "10px",
-        padding: "20px",
-        marginBottom: "20px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-      }}
-    >
-      <h2>{project.title}</h2>
-
-      <p>{project.description}</p>
-
-      <p>
-        <strong>Budget:</strong> ₹{project.budget}
-      </p>
-
-      <p>
-        <strong>Required Skills:</strong> {project.requiredSkills}
-      </p>
-
-      <p>
-        <strong>Status:</strong>{" "}
+    <Card className={`project-card${compact ? " project-card--compact" : ""}`} interactive>
+      <div className="project-card__header">
+        <div className="project-card__heading">
+          <Link className="project-card__title" to={`/projects/${project.id}`}>
+            {project.title}
+          </Link>
+          <span className="project-card__date">
+            <Icon name="calendar" size={15} />
+            {formatDate(project.createdAt)}
+          </span>
+        </div>
         <StatusBadge status={project.status} />
+      </div>
+
+      <p className="project-card__description">
+        {truncate(project.description, compact ? 125 : 190)}
       </p>
 
-      <p>
-        <strong>Created:</strong>{" "}
-        {new Date(project.createdAt).toLocaleString()}
-      </p>
+      {skills && skills.length > 0 && (
+        <div className="tag-list" aria-label="Required skills">
+          {skills.slice(0, compact ? 3 : 5).map((skill) => (
+            <span className="tag" key={skill}>{skill}</span>
+          ))}
+          {skills.length > (compact ? 3 : 5) && (
+            <span className="tag tag--muted">+{skills.length - (compact ? 3 : 5)}</span>
+          )}
+        </div>
+      )}
 
-      <div
-        style={{
-          marginTop: "15px",
-          display: "flex",
-          gap: "10px",
-        }}
-      >
-        {(project.status === "OPEN" || project.status === "DRAFT") && (
-          <>
-            <button
+      <div className="project-card__footer">
+        <span className="project-card__budget">
+          <span className="project-card__meta-label">Budget</span>
+          {formatCurrency(project.budget)}
+        </span>
+        <div className="project-card__actions">
+          {canModify && onEdit && (
+            <Button
+              aria-label={`Edit ${project.title}`}
+              leftIcon={<Icon name="edit" size={16} />}
               onClick={() => onEdit(project.id)}
-              style={{
-                background: "#007bff",
-                color: "#fff",
-                border: "none",
-                padding: "8px 16px",
-                borderRadius: "5px",
-                cursor: "pointer",
-              }}
+              size="sm"
+              variant="ghost"
             >
               Edit
-            </button>
-
-            <button
+            </Button>
+          )}
+          {canModify && onDelete && (
+            <Button
+              aria-label={`Delete ${project.title}`}
+              disabled={deleting}
+              leftIcon={<Icon name="trash" size={16} />}
               onClick={() => onDelete(project.id)}
-              style={{
-                background: "#dc3545",
-                color: "#fff",
-                border: "none",
-                padding: "8px 16px",
-                borderRadius: "5px",
-                cursor: "pointer",
-              }}
+              size="sm"
+              variant="ghost"
             >
               Delete
-            </button>
-          </>
-        )}
+            </Button>
+          )}
+          <Link className="button button--primary button--sm" to={`/projects/${project.id}`}>
+            View details
+            <Icon name="arrow-right" size={16} />
+          </Link>
+        </div>
       </div>
-    </div>
+    </Card>
   );
 };
 

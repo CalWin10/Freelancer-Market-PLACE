@@ -1,74 +1,277 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import api from "../../services/api";
+import { useRef, useState, type FormEvent } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import Button from "../../components/common/Button";
+import { Input, Select } from "../../components/common/FormControls";
+import Icon from "../../components/common/Icon";
+import AuthLayout, {
+  AuthAlert,
+  PasswordToggle,
+  getAuthDestination,
+} from "../../components/layout/AuthLayout";
+import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
+import { getApiErrorMessage, getApiFieldErrors } from "../../services/api";
+import { register, type RegisterRequest } from "../../services/authService";
+
+interface RegisterForm extends RegisterRequest {
+  confirmPassword: string;
+}
+
+type RegisterErrors = Partial<Record<keyof RegisterForm, string>>;
+type RegisterTextField = Exclude<keyof RegisterForm, "role">;
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function fullNameError(value: string): string | undefined {
+  return value.trim() ? undefined : "Enter your full name.";
+}
+
+function emailError(value: string): string | undefined {
+  if (!value.trim()) return "Enter your email address.";
+  if (!EMAIL_PATTERN.test(value.trim())) return "Enter a valid email address.";
+  return undefined;
+}
+
+function passwordError(value: string): string | undefined {
+  if (!value) return "Create a password.";
+  if (value.length < 8) return "Password must be at least 8 characters.";
+  return undefined;
+}
+
+function confirmationError(password: string, confirmation: string): string | undefined {
+  if (!confirmation) return "Confirm your password.";
+  if (confirmation !== password) return "Passwords do not match.";
+  return undefined;
+}
 
 export default function Register() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ fullName: "", email: "", password: "", role: "FREELANCER" });
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const location = useLocation();
+  const { setSession } = useAuth();
+  const { showToast } = useToast();
+  const submissionLock = useRef(false);
 
-  const set = (k: string) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      setForm((f) => ({ ...f, [k]: e.target.value }));
+  const [form, setForm] = useState<RegisterForm>({
+    fullName: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    role: "FREELANCER",
+  });
+  const [fieldErrors, setFieldErrors] = useState<RegisterErrors>({});
+  const [formError, setFormError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (form.password.length < 8) { setError("Password must be at least 8 characters."); return; }
-    setLoading(true);
+  const updateTextField = (field: RegisterTextField, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => ({ ...current, [field]: undefined }));
+    setFormError("");
+  };
+
+  const updateRole = (value: string) => {
+    if (value !== "CLIENT" && value !== "FREELANCER") return;
+    setForm((current) => ({ ...current, role: value }));
+    setFieldErrors((current) => ({ ...current, role: undefined }));
+    setFormError("");
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (submissionLock.current) return;
+
+    const errors: RegisterErrors = {
+      fullName: fullNameError(form.fullName),
+      email: emailError(form.email),
+      password: passwordError(form.password),
+      confirmPassword: confirmationError(form.password, form.confirmPassword),
+      role:
+        form.role === "CLIENT" || form.role === "FREELANCER"
+          ? undefined
+          : "Choose how you want to use the marketplace.",
+    };
+    setFieldErrors(errors);
+    setFormError("");
+
+    if (Object.values(errors).some(Boolean)) return;
+
+    submissionLock.current = true;
+    setIsSubmitting(true);
+
     try {
-      const res = await api.post("/auth/register", form);
-      localStorage.setItem("token", res.data.token);
-      navigate("/projects/my");
-    } catch (err: any) {
-      const errors = err.response?.data?.errors;
-      if (errors) setError(Object.values(errors).join("\n"));
-      else setError(err.response?.data?.message ?? "Registration failed.");
+      const response = await register({
+        fullName: form.fullName.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        role: form.role,
+      });
+
+      if (!setSession(response.token)) {
+        const message = "Your account was created, but the session could not be started. Please sign in.";
+        setFormError(message);
+        showToast({ type: "error", title: "Session unavailable", message });
+        return;
+      }
+
+      showToast({
+        type: "success",
+        title: "Account created",
+        message: response.message || "Welcome to Freelancer Marketplace.",
+      });
+      navigate(getAuthDestination(location.state), { replace: true });
+    } catch (error) {
+      const apiFields = getApiFieldErrors(error);
+      const serverErrors: RegisterErrors = {
+        fullName: apiFields.fullName,
+        email: apiFields.email,
+        password: apiFields.password,
+        role: apiFields.role,
+      };
+      const hasFieldErrors = Object.values(serverErrors).some(Boolean);
+      const message = getApiErrorMessage(error, "Unable to create your account. Please try again.");
+
+      setFieldErrors(serverErrors);
+      setFormError(hasFieldErrors ? "" : message);
+      showToast({
+        type: "error",
+        title: hasFieldErrors ? "Check your details" : "Registration failed",
+        message: hasFieldErrors ? "Correct the highlighted fields and try again." : message,
+      });
     } finally {
-      setLoading(false);
+      submissionLock.current = false;
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div style={s.page}>
-      <div style={s.card}>
-        <h2 style={s.heading}>Create Account</h2>
-        {error && <p style={s.error}>{error}</p>}
-        <form onSubmit={handleSubmit} style={s.form}>
-          <label style={s.label}>Full Name</label>
-          <input style={s.input} value={form.fullName} onChange={set("fullName")} required />
+    <AuthLayout
+      eyebrow="Join the marketplace"
+      title="Create your account"
+      description="Choose your role and set up a secure account in a few moments."
+      footer={
+        <p className="auth-form__aside">
+          Already have an account?{" "}
+          <Link className="auth-form__link" to="/login" state={location.state}>
+            Sign in
+          </Link>
+        </p>
+      }
+    >
+      {formError && <AuthAlert title="We could not create your account">{formError}</AuthAlert>}
 
-          <label style={s.label}>Email</label>
-          <input style={s.input} type="email" value={form.email} onChange={set("email")} required />
+      <form className="auth-form" onSubmit={handleSubmit} noValidate>
+        <Input
+          id="register-name"
+          name="fullName"
+          label="Full name"
+          type="text"
+          autoComplete="name"
+          autoFocus
+          required
+          value={form.fullName}
+          error={fieldErrors.fullName}
+          leadingIcon={<Icon name="user" size={18} />}
+          onChange={(event) => updateTextField("fullName", event.target.value)}
+          onBlur={() =>
+            setFieldErrors((current) => ({
+              ...current,
+              fullName: fullNameError(form.fullName),
+            }))
+          }
+        />
 
-          <label style={s.label}>Password <span style={{ fontWeight: 400, color: "#718096" }}>(min 8 characters)</span></label>
-          <input style={s.input} type="password" value={form.password} onChange={set("password")} required minLength={8} />
+        <Input
+          id="register-email"
+          name="email"
+          label="Email address"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          spellCheck={false}
+          required
+          value={form.email}
+          error={fieldErrors.email}
+          leadingIcon={<Icon name="mail" size={18} />}
+          onChange={(event) => updateTextField("email", event.target.value)}
+          onBlur={() =>
+            setFieldErrors((current) => ({ ...current, email: emailError(form.email) }))
+          }
+        />
 
-          <label style={s.label}>I am a</label>
-          <select style={s.input} value={form.role} onChange={set("role")}>
-            <option value="FREELANCER">Freelancer</option>
-            <option value="CLIENT">Client</option>
-          </select>
+        <Select
+          id="register-role"
+          name="role"
+          label="I want to join as"
+          required
+          value={form.role}
+          error={fieldErrors.role}
+          hint="Choose how you plan to use the marketplace."
+          onChange={(event) => updateRole(event.target.value)}
+        >
+          <option value="FREELANCER">Freelancer - find projects</option>
+          <option value="CLIENT">Client - hire professionals</option>
+        </Select>
 
-          <button style={s.btn} type="submit" disabled={loading}>
-            {loading ? "Creating account…" : "Register"}
-          </button>
-        </form>
-        <p style={s.footer}>Already have an account? <Link to="/login">Sign In</Link></p>
-      </div>
-    </div>
+        <Input
+          id="register-password"
+          name="password"
+          label="Password"
+          type={showPassword ? "text" : "password"}
+          autoComplete="new-password"
+          required
+          minLength={8}
+          value={form.password}
+          error={fieldErrors.password}
+          hint="Use at least 8 characters."
+          trailingElement={
+            <PasswordToggle
+              visible={showPassword}
+              onToggle={() => setShowPassword((visible) => !visible)}
+            />
+          }
+          onChange={(event) => updateTextField("password", event.target.value)}
+          onBlur={() =>
+            setFieldErrors((current) => ({ ...current, password: passwordError(form.password) }))
+          }
+        />
+
+        <Input
+          id="register-confirm-password"
+          name="confirmPassword"
+          label="Confirm password"
+          type={showConfirmation ? "text" : "password"}
+          autoComplete="new-password"
+          required
+          value={form.confirmPassword}
+          error={fieldErrors.confirmPassword}
+          trailingElement={
+            <PasswordToggle
+              visible={showConfirmation}
+              onToggle={() => setShowConfirmation((visible) => !visible)}
+            />
+          }
+          onChange={(event) => updateTextField("confirmPassword", event.target.value)}
+          onBlur={() =>
+            setFieldErrors((current) => ({
+              ...current,
+              confirmPassword: confirmationError(form.password, form.confirmPassword),
+            }))
+          }
+        />
+
+        <div className="auth-form__actions">
+          <Button
+            type="submit"
+            size="lg"
+            fullWidth
+            loading={isSubmitting}
+            loadingText="Creating account..."
+          >
+            Create account
+          </Button>
+        </div>
+      </form>
+    </AuthLayout>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page:    { minHeight: "100vh", background: "#f5f7fa", display: "flex", justifyContent: "center", alignItems: "center", padding: "1rem" },
-  card:    { background: "#fff", borderRadius: 12, padding: "2rem", width: "100%", maxWidth: 420, boxShadow: "0 2px 16px rgba(0,0,0,0.08)" },
-  heading: { marginBottom: "1.5rem", fontSize: "1.5rem", color: "#1a1a2e" },
-  error:   { color: "#e53e3e", marginBottom: "1rem", fontSize: "0.875rem", whiteSpace: "pre-line" },
-  form:    { display: "flex", flexDirection: "column", gap: "0.5rem" },
-  label:   { fontWeight: 600, fontSize: "0.875rem", color: "#4a5568", marginTop: "0.5rem" },
-  input:   { padding: "0.6rem 0.75rem", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: "0.95rem", width: "100%", boxSizing: "border-box" },
-  btn:     { marginTop: "1.25rem", padding: "0.75rem", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: "1rem" },
-  footer:  { marginTop: "0.75rem", fontSize: "0.875rem", textAlign: "center" },
-};

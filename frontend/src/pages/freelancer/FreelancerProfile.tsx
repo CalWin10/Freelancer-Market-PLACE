@@ -1,317 +1,319 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Button from "../../components/common/Button";
+import Card, { CardHeader } from "../../components/common/Card";
+import ConfirmDialog from "../../components/common/ConfirmDialog";
+import EmptyState from "../../components/common/EmptyState";
+import ErrorState from "../../components/common/ErrorState";
+import { Input, Textarea } from "../../components/common/FormControls";
+import Icon from "../../components/common/Icon";
+import Loader from "../../components/common/Loader";
+import ProfilePhotoEditor from "../../components/profile/ProfilePhotoEditor";
+import { useToast } from "../../context/ToastContext";
+import { getApiErrorMessage, getApiFieldErrors } from "../../services/api";
 import {
-  FreelancerProfile as FProfile,
-  PortfolioItem,
-  deletePhoto,
   getFreelancerProfile,
   updateFreelancerProfile,
-  uploadPhoto,
+  type FreelancerProfile as FreelancerProfileData,
+  type PortfolioItem,
 } from "../../services/userService";
 
-const PHOTO_BASE = "http://localhost:8080";
+interface FreelancerForm {
+  bio: string;
+  location: string;
+  hourlyRate: string;
+  skills: string[];
+  portfolioItems: PortfolioItem[];
+}
+
+type FieldErrors = Record<string, string | undefined>;
+
+const emptyForm: FreelancerForm = {
+  bio: "",
+  location: "",
+  hourlyRate: "",
+  skills: [],
+  portfolioItems: [],
+};
+
+const isWebUrl = (value: string) => {
+  if (!value.trim()) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+const profileToForm = (profile: FreelancerProfileData): FreelancerForm => ({
+  bio: profile.bio ?? "",
+  location: profile.location ?? "",
+  hourlyRate: profile.hourlyRate == null ? "" : String(profile.hourlyRate),
+  skills: profile.skills ?? [],
+  portfolioItems: profile.portfolioItems ?? [],
+});
 
 export default function FreelancerProfile() {
-  const [profile, setProfile] = useState<FProfile>({});
+  const { showToast } = useToast();
+  const submissionLock = useRef(false);
+  const [profile, setProfile] = useState<FreelancerProfileData | null>(null);
+  const [form, setForm] = useState<FreelancerForm>(emptyForm);
   const [skillInput, setSkillInput] = useState("");
+  const [skillError, setSkillError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [photoUploading, setPhotoUploading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [removePortfolioIndex, setRemovePortfolioIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    getFreelancerProfile()
-      .then(setProfile)
-      .catch(() => setError("Failed to load profile"));
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    setFormError("");
+    try {
+      const response = await getFreelancerProfile();
+      setProfile(response);
+      setForm(profileToForm(response));
+      setFieldErrors({});
+    } catch (requestError) {
+      setProfile(null);
+      setFormError(getApiErrorMessage(requestError, "Your profile could not be loaded."));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
+  useEffect(() => { void loadProfile(); }, [loadProfile]);
+
+  const setField = (field: "bio" | "location" | "hourlyRate", value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => ({ ...current, [field]: undefined }));
+    setFormError("");
+  };
+
+  const addSkill = () => {
+    const skill = skillInput.trim();
+    if (!skill) {
+      setSkillError("Enter a skill before adding it.");
+      return;
+    }
+    if (form.skills.some((current) => current.toLocaleLowerCase() === skill.toLocaleLowerCase())) {
+      setSkillError("That skill is already on your profile.");
+      return;
+    }
+    setForm((current) => ({ ...current, skills: [...current.skills, skill] }));
+    setSkillInput("");
+    setSkillError("");
+  };
+
+  const removeSkill = (index: number) => {
+    setForm((current) => ({ ...current, skills: current.skills.filter((_, itemIndex) => itemIndex !== index) }));
+  };
+
+  const addPortfolioItem = () => {
+    setForm((current) => ({
+      ...current,
+      portfolioItems: [...current.portfolioItems, { title: "", description: "", projectUrl: "", imageUrl: "" }],
+    }));
+  };
+
+  const updatePortfolioItem = (index: number, field: keyof PortfolioItem, value: string) => {
+    setForm((current) => ({
+      ...current,
+      portfolioItems: current.portfolioItems.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item),
+    }));
+    setFieldErrors((current) => ({ ...current, [`portfolioItems[${index}].${field}`]: undefined }));
+  };
+
+  const confirmRemovePortfolio = () => {
+    if (removePortfolioIndex == null) return;
+    setForm((current) => ({
+      ...current,
+      portfolioItems: current.portfolioItems.filter((_, index) => index !== removePortfolioIndex),
+    }));
+    setRemovePortfolioIndex(null);
+  };
+
+  const validate = (): FieldErrors => {
+    const errors: FieldErrors = {};
+    if (form.bio.length > 2000) errors.bio = "Bio must not exceed 2,000 characters.";
+    if (form.hourlyRate !== "" && Number(form.hourlyRate) <= 0) errors.hourlyRate = "Hourly rate must be greater than zero.";
+    form.portfolioItems.forEach((item, index) => {
+      if (!item.title.trim()) errors[`portfolioItems[${index}].title`] = "Portfolio title is required.";
+      if (!isWebUrl(item.projectUrl ?? "")) errors[`portfolioItems[${index}].projectUrl`] = "Enter a valid http:// or https:// URL.";
+      if (!isWebUrl(item.imageUrl ?? "")) errors[`portfolioItems[${index}].imageUrl`] = "Enter a valid http:// or https:// URL.";
+    });
+    return errors;
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (submissionLock.current) return;
+    const validationErrors = validate();
+    setFieldErrors(validationErrors);
+    if (Object.values(validationErrors).some(Boolean)) return;
+
+    submissionLock.current = true;
     setSaving(true);
+    setFormError("");
     try {
-      const updated = await updateFreelancerProfile(profile);
+      const updated = await updateFreelancerProfile({
+        bio: form.bio.trim() || undefined,
+        location: form.location.trim() || undefined,
+        hourlyRate: form.hourlyRate === "" ? undefined : Number(form.hourlyRate),
+        skills: form.skills,
+        portfolioItems: form.portfolioItems.map((item) => ({
+          id: item.id,
+          title: item.title.trim(),
+          description: item.description?.trim() || undefined,
+          projectUrl: item.projectUrl?.trim() || undefined,
+          imageUrl: item.imageUrl?.trim() || undefined,
+        })),
+      });
       setProfile(updated);
-      setSuccess("Profile saved successfully");
-    } catch (err: any) {
-      setError(err.response?.data?.message ?? "Failed to save profile");
+      setForm(profileToForm(updated));
+      showToast({ type: "success", title: "Profile saved", message: "Clients can now find your latest profile information." });
+    } catch (requestError) {
+      setFieldErrors(getApiFieldErrors(requestError));
+      setFormError(getApiErrorMessage(requestError, "Your profile could not be saved."));
     } finally {
+      submissionLock.current = false;
       setSaving(false);
     }
   };
 
-  const addSkill = () => {
-    const s = skillInput.trim();
-    if (!s) return;
-    setProfile((p) => ({ ...p, skills: [...(p.skills ?? []), s] }));
-    setSkillInput("");
-  };
-
-  const removeSkill = (i: number) =>
-    setProfile((p) => ({
-      ...p,
-      skills: p.skills?.filter((_, idx) => idx !== i),
-    }));
-
-  const addPortfolioItem = () =>
-    setProfile((p) => ({
-      ...p,
-      portfolioItems: [
-        ...(p.portfolioItems ?? []),
-        { title: "", description: "", projectUrl: "", imageUrl: "" },
-      ],
-    }));
-
-  const updatePortfolioItem = (i: number, field: keyof PortfolioItem, value: string) =>
-    setProfile((p) => {
-      const items = [...(p.portfolioItems ?? [])];
-      items[i] = { ...items[i], [field]: value };
-      return { ...p, portfolioItems: items };
-    });
-
-  const removePortfolioItem = (i: number) =>
-    setProfile((p) => ({
-      ...p,
-      portfolioItems: p.portfolioItems?.filter((_, idx) => idx !== i),
-    }));
-
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!["image/jpeg", "image/png"].includes(file.type)) {
-      setError("Only JPEG and PNG files are allowed");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setError("File size must not exceed 5 MB");
-      return;
-    }
-    setPhotoUploading(true);
-    setError("");
-    try {
-      const url = await uploadPhoto(file);
-      setProfile((p) => ({ ...p, profilePhotoUrl: url }));
-      setSuccess("Photo uploaded");
-    } catch {
-      setError("Photo upload failed");
-    } finally {
-      setPhotoUploading(false);
-    }
-  };
-
-  const handleDeletePhoto = async () => {
-    try {
-      await deletePhoto();
-      setProfile((p) => ({ ...p, profilePhotoUrl: undefined }));
-      setSuccess("Photo removed");
-    } catch {
-      setError("Failed to remove photo");
-    }
-  };
+  if (loading) return <Loader fullPage label="Loading your profile" />;
+  if (!profile) {
+    return (
+      <div className="page-container page-container--narrow">
+        <ErrorState message={formError || "Your profile is unavailable."} onRetry={loadProfile} title="Profile unavailable" />
+      </div>
+    );
+  }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <h2 style={styles.heading}>Freelancer Profile</h2>
-
-        {error && <p style={styles.error}>{error}</p>}
-        {success && <p style={styles.success}>{success}</p>}
-
-        {/* Photo */}
-        <div style={styles.photoSection}>
-          {profile.profilePhotoUrl ? (
-            <img
-              src={PHOTO_BASE + profile.profilePhotoUrl}
-              alt="Profile"
-              style={styles.avatar}
-            />
-          ) : (
-            <div style={styles.avatarPlaceholder}>No Photo</div>
-          )}
-          <div style={styles.photoActions}>
-            <button style={styles.btnSecondary} onClick={() => fileRef.current?.click()}
-              disabled={photoUploading}>
-              {photoUploading ? "Uploading…" : "Upload Photo"}
-            </button>
-            {profile.profilePhotoUrl && (
-              <button style={styles.btnDanger} onClick={handleDeletePhoto}>
-                Remove
-              </button>
-            )}
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/jpeg,image/png"
-            style={{ display: "none" }}
-            onChange={handlePhotoChange}
-          />
+    <div className="page-container page-container--profile">
+      <div className="page-header">
+        <div>
+          <span className="eyebrow"><Icon name="user" size={15} /> Professional profile</span>
+          <h1 className="page-title">Freelancer profile</h1>
+          <p className="page-subtitle">Show clients the expertise, experience, and work you bring to their projects.</p>
         </div>
+      </div>
 
-        <form onSubmit={handleSave} style={styles.form}>
-          <label style={styles.label}>Full Name</label>
-          <input style={styles.input} value={profile.fullName ?? ""} disabled />
-
-          <label style={styles.label}>Email</label>
-          <input style={styles.input} value={profile.email ?? ""} disabled />
-
-          <label style={styles.label}>Bio</label>
-          <textarea
-            style={styles.textarea}
-            value={profile.bio ?? ""}
-            maxLength={2000}
-            onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
-          />
-
-          <label style={styles.label}>Location</label>
-          <input
-            style={styles.input}
-            value={profile.location ?? ""}
-            onChange={(e) => setProfile((p) => ({ ...p, location: e.target.value }))}
-          />
-
-          <label style={styles.label}>Hourly Rate ($/hr)</label>
-          <input
-            style={styles.input}
-            type="number"
-            min="0"
-            step="0.01"
-            value={profile.hourlyRate ?? ""}
-            onChange={(e) =>
-              setProfile((p) => ({ ...p, hourlyRate: parseFloat(e.target.value) || undefined }))
-            }
-          />
-
-          {/* Skills */}
-          <label style={styles.label}>Skills</label>
-          <div style={styles.skillRow}>
-            <input
-              style={{ ...styles.input, flex: 1, marginBottom: 0 }}
-              value={skillInput}
-              placeholder="Add a skill"
-              onChange={(e) => setSkillInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSkill())}
+      <div className="profile-layout">
+        <aside className="stack">
+          <Card padding="lg">
+            <ProfilePhotoEditor
+              disabled={saving}
+              displayName={profile.fullName}
+              onPhotoChange={(profilePhotoUrl) => setProfile((current) => current ? { ...current, profilePhotoUrl } : current)}
+              photoUrl={profile.profilePhotoUrl}
             />
-            <button type="button" style={styles.btnSecondary} onClick={addSkill}>
-              Add
-            </button>
-          </div>
-          <div style={styles.skillTags}>
-            {(profile.skills ?? []).map((s, i) => (
-              <span key={i} style={styles.tag}>
-                {s}
-                <button type="button" style={styles.tagRemove} onClick={() => removeSkill(i)}>
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
+          </Card>
+          <Card className="profile-identity-card">
+            <span className="profile-identity-card__label">Account details</span>
+            <strong>{profile.fullName}</strong>
+            <span>{profile.email}</span>
+            <p>Name and email cannot be changed through the current backend API.</p>
+          </Card>
+        </aside>
 
-          {/* Portfolio */}
-          <label style={styles.label}>Portfolio Items</label>
-          {(profile.portfolioItems ?? []).map((item, i) => (
-            <div key={i} style={styles.portfolioItem}>
-              <input
-                style={styles.input}
-                placeholder="Title *"
-                value={item.title}
-                required
-                onChange={(e) => updatePortfolioItem(i, "title", e.target.value)}
+        <form className="stack stack--lg" onSubmit={handleSubmit} noValidate>
+          <Card padding="lg">
+            <CardHeader title="Professional overview" description="This information appears in client talent searches." />
+            {formError && <div className="alert alert--error" role="alert"><Icon name="error" size={18} /><span>{formError}</span></div>}
+            <div className="stack stack--lg">
+              <Textarea
+                error={fieldErrors.bio}
+                hint={`${form.bio.length.toLocaleString()} / 2,000 characters`}
+                label="Professional bio"
+                maxLength={2000}
+                onChange={(event) => setField("bio", event.target.value)}
+                placeholder="Summarize your experience, strengths, and the kind of work you do best."
+                rows={8}
+                value={form.bio}
               />
-              <input
-                style={styles.input}
-                placeholder="Description"
-                value={item.description ?? ""}
-                onChange={(e) => updatePortfolioItem(i, "description", e.target.value)}
-              />
-              <input
-                style={styles.input}
-                placeholder="Project URL"
-                value={item.projectUrl ?? ""}
-                onChange={(e) => updatePortfolioItem(i, "projectUrl", e.target.value)}
-              />
-              <button
-                type="button"
-                style={styles.btnDanger}
-                onClick={() => removePortfolioItem(i)}
-              >
-                Remove
-              </button>
+              <div className="form-grid form-grid--two">
+                <Input label="Location" leadingIcon={<Icon name="map-pin" size={17} />} onChange={(event) => setField("location", event.target.value)} placeholder="City, country or time zone" value={form.location} />
+                <Input error={fieldErrors.hourlyRate} hint="USD per hour" label="Hourly rate" min="0.01" onChange={(event) => setField("hourlyRate", event.target.value)} placeholder="50" step="0.01" type="number" value={form.hourlyRate} />
+              </div>
             </div>
-          ))}
-          <button type="button" style={styles.btnSecondary} onClick={addPortfolioItem}>
-            + Add Portfolio Item
-          </button>
+          </Card>
 
-          <button type="submit" style={styles.btnPrimary} disabled={saving}>
-            {saving ? "Saving…" : "Save Profile"}
-          </button>
+          <Card padding="lg">
+            <CardHeader title="Skills" description="Add the searchable skills that best represent your expertise." />
+            <div className="skill-editor">
+              <Input
+                error={skillError}
+                hideLabel
+                label="Add a skill"
+                onChange={(event) => { setSkillInput(event.target.value); setSkillError(""); }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") { event.preventDefault(); addSkill(); }
+                }}
+                placeholder="Type a skill and press Enter"
+                value={skillInput}
+              />
+              <Button leftIcon={<Icon name="plus" size={16} />} onClick={addSkill} variant="secondary">Add skill</Button>
+            </div>
+            {form.skills.length > 0 ? (
+              <div className="editable-tags" aria-label="Your skills">
+                {form.skills.map((skill, index) => (
+                  <span className="editable-tag" key={`${skill}-${index}`}>
+                    {skill}
+                    <button aria-label={`Remove ${skill}`} onClick={() => removeSkill(index)} type="button"><Icon name="close" size={14} /></button>
+                  </span>
+                ))}
+              </div>
+            ) : <EmptyState compact description="Skills help your profile appear in relevant searches." icon="settings" title="No skills added" />}
+          </Card>
+
+          <Card padding="lg">
+            <CardHeader
+              action={<Button leftIcon={<Icon name="plus" size={16} />} onClick={addPortfolioItem} size="sm" variant="secondary">Add item</Button>}
+              description="Showcase project links and supporting images. Portfolio data is saved with your profile."
+              title="Portfolio"
+            />
+            {form.portfolioItems.length === 0 ? (
+              <EmptyState compact action={<Button onClick={addPortfolioItem} size="sm" variant="secondary">Add your first item</Button>} description="Add examples that demonstrate the quality of your work." icon="file" title="No portfolio items" />
+            ) : (
+              <div className="portfolio-editor-list">
+                {form.portfolioItems.map((item, index) => (
+                  <fieldset className="portfolio-editor" key={item.id ?? `new-${index}`}>
+                    <legend>Portfolio item {index + 1}</legend>
+                    <div className="portfolio-editor__header">
+                      <strong>{item.title.trim() || `Untitled item ${index + 1}`}</strong>
+                      <Button aria-label={`Remove portfolio item ${index + 1}`} leftIcon={<Icon name="trash" size={15} />} onClick={() => setRemovePortfolioIndex(index)} size="sm" variant="ghost">Remove</Button>
+                    </div>
+                    <Input error={fieldErrors[`portfolioItems[${index}].title`]} label="Title" onChange={(event) => updatePortfolioItem(index, "title", event.target.value)} placeholder="Project or case-study title" required value={item.title} />
+                    <Textarea label="Description" onChange={(event) => updatePortfolioItem(index, "description", event.target.value)} placeholder="What you built, your role, and the outcome" rows={4} value={item.description ?? ""} />
+                    <div className="form-grid form-grid--two">
+                      <Input error={fieldErrors[`portfolioItems[${index}].projectUrl`]} label="Project URL" onChange={(event) => updatePortfolioItem(index, "projectUrl", event.target.value)} placeholder="https://example.com/project" type="url" value={item.projectUrl ?? ""} />
+                      <Input error={fieldErrors[`portfolioItems[${index}].imageUrl`]} label="Image URL" onChange={(event) => updatePortfolioItem(index, "imageUrl", event.target.value)} placeholder="https://example.com/preview.jpg" type="url" value={item.imageUrl ?? ""} />
+                    </div>
+                  </fieldset>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <div className="form-actions profile-save-actions">
+            <Button disabled={saving} onClick={loadProfile} variant="secondary">Discard changes</Button>
+            <Button loading={saving} loadingText="Saving profile…" type="submit">Save profile</Button>
+          </div>
         </form>
       </div>
+
+      <ConfirmDialog
+        confirmLabel="Remove item"
+        description="Remove this portfolio item from the form? Save the profile to persist the change."
+        destructive
+        onCancel={() => setRemovePortfolioIndex(null)}
+        onConfirm={confirmRemovePortfolio}
+        open={removePortfolioIndex != null}
+        title="Remove portfolio item?"
+      />
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f5f7fa",
-    display: "flex",
-    justifyContent: "center",
-    padding: "2rem 1rem",
-  },
-  card: {
-    background: "#fff",
-    borderRadius: 12,
-    padding: "2rem",
-    width: "100%",
-    maxWidth: 680,
-    boxShadow: "0 2px 16px rgba(0,0,0,0.08)",
-    height: "fit-content",
-  },
-  heading: { marginBottom: "1.5rem", fontSize: "1.5rem", color: "#1a1a2e" },
-  error: { color: "#e53e3e", marginBottom: "1rem" },
-  success: { color: "#38a169", marginBottom: "1rem" },
-  photoSection: { display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" },
-  avatar: { width: 80, height: 80, borderRadius: "50%", objectFit: "cover", border: "2px solid #e2e8f0" },
-  avatarPlaceholder: {
-    width: 80, height: 80, borderRadius: "50%", background: "#e2e8f0",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: "0.75rem", color: "#718096",
-  },
-  photoActions: { display: "flex", gap: "0.5rem", flexWrap: "wrap" },
-  form: { display: "flex", flexDirection: "column", gap: "0.5rem" },
-  label: { fontWeight: 600, fontSize: "0.875rem", color: "#4a5568", marginTop: "0.75rem" },
-  input: {
-    padding: "0.6rem 0.75rem", borderRadius: 8, border: "1px solid #e2e8f0",
-    fontSize: "0.95rem", marginBottom: "0.25rem", width: "100%", boxSizing: "border-box",
-  },
-  textarea: {
-    padding: "0.6rem 0.75rem", borderRadius: 8, border: "1px solid #e2e8f0",
-    fontSize: "0.95rem", minHeight: 100, resize: "vertical", width: "100%", boxSizing: "border-box",
-  },
-  skillRow: { display: "flex", gap: "0.5rem", alignItems: "center" },
-  skillTags: { display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.4rem" },
-  tag: {
-    background: "#ebf4ff", color: "#2b6cb0", borderRadius: 20,
-    padding: "0.2rem 0.6rem", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: 4,
-  },
-  tagRemove: { background: "none", border: "none", cursor: "pointer", color: "#2b6cb0", fontWeight: 700, padding: 0 },
-  portfolioItem: {
-    border: "1px solid #e2e8f0", borderRadius: 8, padding: "0.75rem",
-    display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "0.5rem",
-  },
-  btnPrimary: {
-    marginTop: "1.5rem", padding: "0.75rem", background: "#4f46e5", color: "#fff",
-    border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: "1rem",
-  },
-  btnSecondary: {
-    padding: "0.5rem 1rem", background: "#edf2f7", color: "#4a5568",
-    border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 500,
-  },
-  btnDanger: {
-    padding: "0.5rem 1rem", background: "#fff5f5", color: "#e53e3e",
-    border: "1px solid #fed7d7", borderRadius: 8, cursor: "pointer", fontWeight: 500,
-  },
-};

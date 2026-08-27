@@ -1,40 +1,66 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-
-import CreateProject from "./pages/project/CreateProject";
-import MyProjects from "./pages/project/MyProjects";
-import EditProject from "./pages/project/EditProject";
-import FreelancerProfile from "./pages/freelancer/FreelancerProfile";
-import ClientProfile from "./pages/client/ClientProfile";
+import { Navigate, Route, Routes } from "react-router-dom";
+import AppShell from "./components/layout/AppShell";
+import ForgotPassword from "./pages/auth/ForgotPassword";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
-import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
+import ClientProfile from "./pages/client/ClientProfile";
+import Dashboard from "./pages/dashboard/Dashboard";
+import FreelancerProfile from "./pages/freelancer/FreelancerProfile";
+import LandingPage from "./pages/home/LandingPage";
+import ProjectMessages from "./pages/messaging/Messages";
+import NotFound from "./pages/NotFound";
+import Profile from "./pages/profile/Profile";
+import CreateProject from "./pages/project/CreateProject";
+import EditProject from "./pages/project/EditProject";
+import MyProjects from "./pages/project/MyProjects";
+import ProjectDetail from "./pages/project/ProjectDetail";
+import FreelancerSearch from "./pages/search/FreelancerSearch";
+import ProjectSearch from "./pages/search/ProjectSearch";
+import ProtectedRoute from "./routes/ProtectedRoute";
+import PublicOnlyRoute from "./routes/PublicOnlyRoute";
+import RoleRoute from "./routes/RoleRoute";
 
-function App() {
+export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/projects/my" replace />} />
-
-        {/* Auth */}
+    <Routes>
+      <Route element={<PublicOnlyRoute />}>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+      </Route>
 
-        {/* Projects */}
-        <Route path="/projects/create" element={<CreateProject />} />
-        <Route path="/projects/my" element={<MyProjects />} />
-        <Route path="/projects/edit/:id" element={<EditProject />} />
+      <Route element={<AppShell />}>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/projects" element={<ProjectSearch />} />
+        <Route path="/freelancers" element={<FreelancerSearch />} />
 
-        {/* Profiles */}
-        <Route path="/profile/freelancer" element={<FreelancerProfile />} />
-        <Route path="/profile/client" element={<ClientProfile />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/projects/:id" element={<ProjectDetail />} />
+          <Route path="/projects/:id/messages" element={<ProjectMessages />} />
+          <Route path="/profile" element={<Profile />} />
 
-        <Route path="*" element={<h2>404 - Page Not Found</h2>} />
-      </Routes>
-    </BrowserRouter>
+          <Route element={<RoleRoute allowedRoles={["CLIENT"]} />}>
+            <Route path="/projects/my" element={<MyProjects />} />
+            <Route path="/projects/create" element={<CreateProject />} />
+            <Route path="/projects/edit/:id" element={<EditProject />} />
+            <Route path="/profile/client" element={<ClientProfile />} />
+          </Route>
+
+          <Route element={<RoleRoute allowedRoles={["FREELANCER"]} />}>
+            <Route path="/profile/freelancer" element={<FreelancerProfile />} />
+          </Route>
+        </Route>
+
+        <Route path="/search/projects" element={<Navigate replace to="/projects" />} />
+        <Route path="/search/freelancers" element={<Navigate replace to="/freelancers" />} />
+        <Route path="*" element={<NotFound />} />
+      </Route>
+
+      <Route path="*" element={<Navigate replace to="/" />} />
+    </Routes>
   );
 }
 
-export default App;

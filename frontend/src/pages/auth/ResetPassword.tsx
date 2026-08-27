@@ -1,75 +1,206 @@
-import { useState } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
-import api from "../../services/api";
+import { useRef, useState, type FormEvent } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import Button from "../../components/common/Button";
+import { Input } from "../../components/common/FormControls";
+import Icon from "../../components/common/Icon";
+import AuthLayout, {
+  AuthAlert,
+  PasswordToggle,
+} from "../../components/layout/AuthLayout";
+import { useToast } from "../../context/ToastContext";
+import { getApiErrorMessage, getApiFieldErrors } from "../../services/api";
+import { resetPassword } from "../../services/authService";
+
+interface ResetForm {
+  password: string;
+  confirmPassword: string;
+}
+
+type ResetErrors = Partial<Record<keyof ResetForm, string>>;
+
+function passwordError(value: string): string | undefined {
+  if (!value) return "Enter a new password.";
+  if (value.length < 8) return "Password must be at least 8 characters.";
+  return undefined;
+}
+
+function confirmationError(password: string, confirmation: string): string | undefined {
+  if (!confirmation) return "Confirm your new password.";
+  if (confirmation !== password) return "Passwords do not match.";
+  return undefined;
+}
 
 export default function ResetPassword() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get("token") ?? "";
+  const [searchParams] = useSearchParams();
+  const { showToast } = useToast();
+  const submissionLock = useRef(false);
+  const token = (searchParams.get("token") ?? "").trim();
 
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState<ResetForm>({ password: "", confirmPassword: "" });
+  const [fieldErrors, setFieldErrors] = useState<ResetErrors>({});
+  const [formError, setFormError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
-    if (password !== confirm) { setError("Passwords do not match."); return; }
-    setLoading(true);
+  const updateField = (field: keyof ResetForm, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => ({ ...current, [field]: undefined }));
+    setFormError("");
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (submissionLock.current || !token) return;
+
+    const errors: ResetErrors = {
+      password: passwordError(form.password),
+      confirmPassword: confirmationError(form.password, form.confirmPassword),
+    };
+    setFieldErrors(errors);
+    setFormError("");
+
+    if (Object.values(errors).some(Boolean)) return;
+
+    submissionLock.current = true;
+    setIsSubmitting(true);
+
     try {
-      await api.post("/auth/reset-password", { token, newPassword: password });
-      alert("Password reset successful! Please sign in.");
-      navigate("/login");
-    } catch (err: any) {
-      setError(err.response?.data?.message ?? "Reset failed. The link may have expired.");
+      const message = await resetPassword(token, form.password);
+      showToast({
+        type: "success",
+        title: "Password updated",
+        message: message || "Your password has been reset. You can now sign in.",
+      });
+      navigate("/login", { replace: true });
+    } catch (error) {
+      const apiFields = getApiFieldErrors(error);
+      const serverPasswordError = apiFields.newPassword;
+      const message = getApiErrorMessage(
+        error,
+        "Unable to reset your password. The link may have expired.",
+      );
+
+      setFieldErrors({ password: serverPasswordError });
+      setFormError(serverPasswordError ? "" : message);
+      showToast({
+        type: "error",
+        title: serverPasswordError ? "Check your password" : "Reset failed",
+        message: serverPasswordError || message,
+      });
     } finally {
-      setLoading(false);
+      submissionLock.current = false;
+      setIsSubmitting(false);
     }
   };
 
   if (!token) {
     return (
-      <div style={s.page}>
-        <div style={s.card}>
-          <p style={s.error}>Invalid or missing reset token.</p>
-          <Link to="/forgot-password">Request a new link</Link>
+      <AuthLayout
+        eyebrow="Account recovery"
+        title="This reset link is incomplete"
+        description="A valid reset token is required before you can choose a new password."
+        footer={
+          <p className="auth-form__aside">
+            Remembered your password?{" "}
+            <Link className="auth-form__link" to="/login">
+              Sign in
+            </Link>
+          </p>
+        }
+      >
+        <div className="auth-form">
+          <AuthAlert title="Missing reset token">
+            Request a new password reset email, then open the complete link from your inbox.
+          </AuthAlert>
+          <div className="auth-form__actions">
+            <Link className="button button--primary button--md button--full" to="/forgot-password">
+              Request a new link
+            </Link>
+          </div>
         </div>
-      </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <div style={s.page}>
-      <div style={s.card}>
-        <h2 style={s.heading}>Reset Password</h2>
-        {error && <p style={s.error}>{error}</p>}
-        <form onSubmit={handleSubmit} style={s.form}>
-          <label style={s.label}>New Password <span style={{ fontWeight: 400, color: "#718096" }}>(min 8 characters)</span></label>
-          <input style={s.input} type="password" value={password}
-            onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+    <AuthLayout
+      eyebrow="Secure your account"
+      title="Choose a new password"
+      description="Create a password you have not used for this account before."
+      footer={
+        <p className="auth-form__aside">
+          <Link className="auth-form__link" to="/login">
+            <Icon name="arrow-left" size={16} />
+            Back to sign in
+          </Link>
+        </p>
+      }
+    >
+      {formError && <AuthAlert title="We could not reset your password">{formError}</AuthAlert>}
 
-          <label style={s.label}>Confirm Password</label>
-          <input style={s.input} type="password" value={confirm}
-            onChange={(e) => setConfirm(e.target.value)} required />
+      <form className="auth-form" onSubmit={handleSubmit} noValidate>
+        <Input
+          id="reset-password"
+          name="newPassword"
+          label="New password"
+          type={showPassword ? "text" : "password"}
+          autoComplete="new-password"
+          autoFocus
+          required
+          minLength={8}
+          value={form.password}
+          error={fieldErrors.password}
+          hint="Use at least 8 characters."
+          trailingElement={
+            <PasswordToggle
+              visible={showPassword}
+              onToggle={() => setShowPassword((visible) => !visible)}
+            />
+          }
+          onChange={(event) => updateField("password", event.target.value)}
+          onBlur={() =>
+            setFieldErrors((current) => ({ ...current, password: passwordError(form.password) }))
+          }
+        />
 
-          <button style={s.btn} type="submit" disabled={loading}>
-            {loading ? "Resetting…" : "Reset Password"}
-          </button>
-        </form>
-      </div>
-    </div>
+        <Input
+          id="reset-confirm-password"
+          name="confirmPassword"
+          label="Confirm new password"
+          type={showConfirmation ? "text" : "password"}
+          autoComplete="new-password"
+          required
+          value={form.confirmPassword}
+          error={fieldErrors.confirmPassword}
+          trailingElement={
+            <PasswordToggle
+              visible={showConfirmation}
+              onToggle={() => setShowConfirmation((visible) => !visible)}
+            />
+          }
+          onChange={(event) => updateField("confirmPassword", event.target.value)}
+          onBlur={() =>
+            setFieldErrors((current) => ({
+              ...current,
+              confirmPassword: confirmationError(form.password, form.confirmPassword),
+            }))
+          }
+        />
+
+        <div className="auth-form__actions">
+          <Button
+            type="submit"
+            size="lg"
+            fullWidth
+            loading={isSubmitting}
+            loadingText="Updating password..."
+          >
+            Update password
+          </Button>
+        </div>
+      </form>
+    </AuthLayout>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page:    { minHeight: "100vh", background: "#f5f7fa", display: "flex", justifyContent: "center", alignItems: "center", padding: "1rem" },
-  card:    { background: "#fff", borderRadius: 12, padding: "2rem", width: "100%", maxWidth: 420, boxShadow: "0 2px 16px rgba(0,0,0,0.08)" },
-  heading: { marginBottom: "1.5rem", fontSize: "1.5rem", color: "#1a1a2e" },
-  error:   { color: "#e53e3e", marginBottom: "1rem", fontSize: "0.875rem" },
-  form:    { display: "flex", flexDirection: "column", gap: "0.5rem" },
-  label:   { fontWeight: 600, fontSize: "0.875rem", color: "#4a5568", marginTop: "0.5rem" },
-  input:   { padding: "0.6rem 0.75rem", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: "0.95rem", width: "100%", boxSizing: "border-box" },
-  btn:     { marginTop: "1.25rem", padding: "0.75rem", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: "1rem" },
-};

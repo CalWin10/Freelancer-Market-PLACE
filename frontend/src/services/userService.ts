@@ -20,6 +20,14 @@ export interface FreelancerProfile {
   portfolioItems?: PortfolioItem[];
 }
 
+export interface UpdateFreelancerProfileRequest {
+  bio?: string;
+  location?: string;
+  hourlyRate?: number;
+  skills?: string[];
+  portfolioItems?: PortfolioItem[];
+}
+
 export interface ClientProfile {
   id?: number;
   fullName?: string;
@@ -30,16 +38,22 @@ export interface ClientProfile {
   profilePhotoUrl?: string;
 }
 
+export interface UpdateClientProfileRequest {
+  companyName?: string;
+  contactName?: string;
+  bio?: string;
+}
+
 export const getFreelancerProfile = () =>
   api.get<FreelancerProfile>("/freelancers/me").then((r) => r.data);
 
-export const updateFreelancerProfile = (data: FreelancerProfile) =>
+export const updateFreelancerProfile = (data: UpdateFreelancerProfileRequest) =>
   api.put<FreelancerProfile>("/freelancers/me", data).then((r) => r.data);
 
 export const getClientProfile = () =>
   api.get<ClientProfile>("/clients/me").then((r) => r.data);
 
-export const updateClientProfile = (data: ClientProfile) =>
+export const updateClientProfile = (data: UpdateClientProfileRequest) =>
   api.put<ClientProfile>("/clients/me", data).then((r) => r.data);
 
 export const uploadPhoto = (file: File) => {
@@ -51,4 +65,4 @@ export const uploadPhoto = (file: File) => {
 };
 
 export const deletePhoto = () =>
-  api.delete("/users/me/photo").then((r) => r.data);
+  api.delete<string>("/users/me/photo").then((r) => r.data);

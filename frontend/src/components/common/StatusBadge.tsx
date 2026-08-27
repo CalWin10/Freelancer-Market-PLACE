@@ -1,44 +1,50 @@
-type StatusBadgeProps = {
+import { classNames } from "../../utils/classNames";
+import { formatStatus } from "../../utils/format";
+
+export type StatusTone = "success" | "info" | "warning" | "danger" | "neutral" | "accent";
+
+interface StatusBadgeProps {
   status: string;
+  label?: string;
+  size?: "sm" | "md";
+  showDot?: boolean;
+  className?: string;
+}
+
+const STATUS_TONES: Record<string, StatusTone> = {
+  OPEN: "success",
+  AVAILABLE: "success",
+  ACTIVE: "success",
+  ACCEPTED: "success",
+  COMPLETED: "success",
+  ASSIGNED: "accent",
+  IN_PROGRESS: "info",
+  PENDING: "warning",
+  DRAFT: "neutral",
+  CANCELLED: "neutral",
+  REJECTED: "danger",
+  INACTIVE: "neutral",
+  LOCKED: "danger",
 };
 
-const StatusBadge = ({ status }: StatusBadgeProps) => {
-  const getColor = () => {
-    switch (status) {
-      case "OPEN":
-        return "#28a745";
+export function getStatusTone(status: string): StatusTone {
+  return STATUS_TONES[status.toUpperCase()] ?? "neutral";
+}
 
-      case "DRAFT":
-        return "#6c757d";
-
-      case "ASSIGNED":
-        return "#007bff";
-
-      case "COMPLETED":
-        return "#17a2b8";
-
-      case "ARCHIVED":
-        return "#dc3545";
-
-      default:
-        return "#6c757d";
-    }
-  };
+export default function StatusBadge({
+  status,
+  label,
+  size = "md",
+  showDot = true,
+  className,
+}: StatusBadgeProps) {
+  const normalizedStatus = status.toUpperCase();
+  const tone = getStatusTone(normalizedStatus);
 
   return (
-    <span
-      style={{
-        backgroundColor: getColor(),
-        color: "white",
-        padding: "6px 12px",
-        borderRadius: "20px",
-        fontSize: "12px",
-        fontWeight: "bold",
-      }}
-    >
-      {status}
+    <span className={classNames("status-badge", `status-badge--${tone}`, `status-badge--${size}`, className)}>
+      {showDot && <span className="status-badge__dot" aria-hidden="true" />}
+      {label ?? formatStatus(normalizedStatus)}
     </span>
   );
-};
-
-export default StatusBadge;
+}

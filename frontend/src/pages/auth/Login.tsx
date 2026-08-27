@@ -1,62 +1,188 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import api from "../../services/api";
+import { useRef, useState, type FormEvent } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import Button from "../../components/common/Button";
+import { Input } from "../../components/common/FormControls";
+import Icon from "../../components/common/Icon";
+import AuthLayout, {
+  AuthAlert,
+  PasswordToggle,
+  getAuthDestination,
+} from "../../components/layout/AuthLayout";
+import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
+import { getApiErrorMessage, getApiFieldErrors } from "../../services/api";
+import { login } from "../../services/authService";
+
+interface LoginForm {
+  email: string;
+  password: string;
+}
+
+type LoginErrors = Partial<Record<keyof LoginForm, string>>;
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function emailError(value: string): string | undefined {
+  if (!value.trim()) return "Enter your email address.";
+  if (!EMAIL_PATTERN.test(value.trim())) return "Enter a valid email address.";
+  return undefined;
+}
+
+function passwordError(value: string): string | undefined {
+  return value ? undefined : "Enter your password.";
+}
 
 export default function Login() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const location = useLocation();
+  const { setSession } = useAuth();
+  const { showToast } = useToast();
+  const submissionLock = useRef(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
+  const [form, setForm] = useState<LoginForm>({ email: "", password: "" });
+  const [fieldErrors, setFieldErrors] = useState<LoginErrors>({});
+  const [formError, setFormError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const updateField = (field: keyof LoginForm, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => ({ ...current, [field]: undefined }));
+    setFormError("");
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (submissionLock.current) return;
+
+    const errors: LoginErrors = {
+      email: emailError(form.email),
+      password: passwordError(form.password),
+    };
+    setFieldErrors(errors);
+    setFormError("");
+
+    if (Object.values(errors).some(Boolean)) return;
+
+    submissionLock.current = true;
+    setIsSubmitting(true);
+
     try {
-      const res = await api.post("/auth/login", { email, password });
-      localStorage.setItem("token", res.data.token);
-      navigate("/projects/my");
-    } catch (err: any) {
-      setError(err.response?.data?.message ?? "Invalid email or password.");
+      const response = await login({
+        email: form.email.trim(),
+        password: form.password,
+      });
+
+      if (!setSession(response.token)) {
+        const message = "Your session could not be started. Please try signing in again.";
+        setFormError(message);
+        showToast({ type: "error", title: "Session unavailable", message });
+        return;
+      }
+
+      showToast({
+        type: "success",
+        title: "Welcome back",
+        message: response.message || "You are now signed in.",
+      });
+      navigate(getAuthDestination(location.state), { replace: true });
+    } catch (error) {
+      const apiFields = getApiFieldErrors(error);
+      const serverErrors: LoginErrors = {
+        email: apiFields.email,
+        password: apiFields.password,
+      };
+      const hasFieldErrors = Object.values(serverErrors).some(Boolean);
+      const message = getApiErrorMessage(error, "Unable to sign in. Please try again.");
+
+      setFieldErrors(serverErrors);
+      setFormError(hasFieldErrors ? "" : message);
+      showToast({
+        type: "error",
+        title: hasFieldErrors ? "Check your details" : "Unable to sign in",
+        message: hasFieldErrors ? "Correct the highlighted fields and try again." : message,
+      });
     } finally {
-      setLoading(false);
+      submissionLock.current = false;
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div style={s.page}>
-      <div style={s.card}>
-        <h2 style={s.heading}>Sign In</h2>
-        {error && <p style={s.error}>{error}</p>}
-        <form onSubmit={handleSubmit} style={s.form}>
-          <label style={s.label}>Email</label>
-          <input style={s.input} type="email" value={email} autoComplete="email"
-            onChange={(e) => setEmail(e.target.value)} required />
+    <AuthLayout
+      eyebrow="Welcome back"
+      title="Sign in to your account"
+      description="Continue to your projects, conversations, and opportunities."
+      footer={
+        <p className="auth-form__aside">
+          New to the marketplace?{" "}
+          <Link className="auth-form__link" to="/register" state={location.state}>
+            Create an account
+          </Link>
+        </p>
+      }
+    >
+      {formError && <AuthAlert title="We could not sign you in">{formError}</AuthAlert>}
 
-          <label style={s.label}>Password</label>
-          <input style={s.input} type="password" value={password} autoComplete="current-password"
-            onChange={(e) => setPassword(e.target.value)} required />
+      <form className="auth-form" onSubmit={handleSubmit} noValidate>
+        <Input
+          id="login-email"
+          name="email"
+          label="Email address"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          spellCheck={false}
+          autoFocus
+          required
+          value={form.email}
+          error={fieldErrors.email}
+          leadingIcon={<Icon name="mail" size={18} />}
+          onChange={(event) => updateField("email", event.target.value)}
+          onBlur={() =>
+            setFieldErrors((current) => ({ ...current, email: emailError(form.email) }))
+          }
+        />
 
-          <button style={s.btn} type="submit" disabled={loading}>
-            {loading ? "Signing in…" : "Sign In"}
-          </button>
-        </form>
-        <p style={s.footer}><Link to="/forgot-password">Forgot password?</Link></p>
-        <p style={s.footer}>No account? <Link to="/register">Register</Link></p>
-      </div>
-    </div>
+        <Input
+          id="login-password"
+          name="password"
+          label="Password"
+          type={showPassword ? "text" : "password"}
+          autoComplete="current-password"
+          required
+          value={form.password}
+          error={fieldErrors.password}
+          trailingElement={
+            <PasswordToggle
+              visible={showPassword}
+              onToggle={() => setShowPassword((visible) => !visible)}
+            />
+          }
+          onChange={(event) => updateField("password", event.target.value)}
+          onBlur={() =>
+            setFieldErrors((current) => ({ ...current, password: passwordError(form.password) }))
+          }
+        />
+
+        <div className="auth-form__aside">
+          <Link className="auth-form__link" to="/forgot-password">
+            Forgot your password?
+          </Link>
+        </div>
+
+        <div className="auth-form__actions">
+          <Button
+            type="submit"
+            size="lg"
+            fullWidth
+            loading={isSubmitting}
+            loadingText="Signing in..."
+          >
+            Sign in
+          </Button>
+        </div>
+      </form>
+    </AuthLayout>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page:    { minHeight: "100vh", background: "#f5f7fa", display: "flex", justifyContent: "center", alignItems: "center", padding: "1rem" },
-  card:    { background: "#fff", borderRadius: 12, padding: "2rem", width: "100%", maxWidth: 420, boxShadow: "0 2px 16px rgba(0,0,0,0.08)" },
-  heading: { marginBottom: "1.5rem", fontSize: "1.5rem", color: "#1a1a2e" },
-  error:   { color: "#e53e3e", marginBottom: "1rem", fontSize: "0.875rem" },
-  form:    { display: "flex", flexDirection: "column", gap: "0.5rem" },
-  label:   { fontWeight: 600, fontSize: "0.875rem", color: "#4a5568", marginTop: "0.5rem" },
-  input:   { padding: "0.6rem 0.75rem", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: "0.95rem", width: "100%", boxSizing: "border-box" },
-  btn:     { marginTop: "1.25rem", padding: "0.75rem", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: "1rem" },
-  footer:  { marginTop: "0.75rem", fontSize: "0.875rem", textAlign: "center" },
-};
