@@ -1,0 +1,31 @@
+package com.freelancer.dto.response;
+
+import com.freelancer.enums.ProjectStatus;
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class ProjectResponse {
+
+    private Long id;
+
+    private String title;
+
+    private String description;
+
+    private BigDecimal budget;
+
+    private String requiredSkills;
+
+    private ProjectStatus status;
+
+    private LocalDateTime createdAt;
+
+    private LocalDateTime updatedAt;
+}
